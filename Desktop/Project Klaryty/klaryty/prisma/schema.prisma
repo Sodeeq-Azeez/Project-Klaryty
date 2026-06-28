@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------------
+// THE ONTOLOGY (Business Meta-Model)
+// -----------------------------------------------------------------------------
+
+// 1. Business
+model Business {
+  id          String   @id @default(uuid())
+  name        String
+  industry    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  parties     Party[]
+  resources   Resource[]
+  processes   Process[]
+  events      EventStore[]
+  records     Record[]
+  rules       Rule[]
+}
+
+// 2. Party (Team Members, Customers, Suppliers)
+model Party {
+  id          String   @id @default(uuid())
+  businessId  String
+  type        PartyType
+  name        String
+  email       String?
+  createdAt   DateTime @default(now())
+
+  business    Business @relation(fields: [businessId], references: [id])
+  
+  @@index([businessId])
+}
+
+enum PartyType {
+  CUSTOMER
+  SUPPLIER
+  EMPLOYEE
+  PARTNER
+}
+
+// 3. Resource (Inventory, Capital, Equipment)
+model Resource {
+  id          String   @id @default(uuid())
+  businessId  String
+  type        ResourceType
+  name        String
+  quantity    Float?
+  unit        String?
+  cost        Float?
+  createdAt   DateTime @default(now())
+
+  business    Business @relation(fields: [businessId], references: [id])
+  
+  @@index([businessId])
+}
+
+enum ResourceType {
+  INVENTORY
+  CAPITAL
+  EQUIPMENT
+  INTELLECTUAL
+}
+
+// 4. Process (Workflows, Step definitions)
+model Process {
+  id          String   @id @default(uuid())
+  businessId  String
+  name        String
+  description String?
+  status      ProcessStatus @default(DRAFT)
+  steps       Json     // Array of step definitions
+  createdAt   DateTime @default(now())
+
+  business    Business @relation(fields: [businessId], references: [id])
+  
+  @@index([businessId])
+}
+
+enum ProcessStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+// 5. Record (Invoices, Receipts, Contracts)
+model Record {
+  id          String   @id @default(uuid())
+  businessId  String
+  type        String   // e.g., "Invoice", "Contract"
+  data        Json     // Snapshot of the document data
+  createdAt   DateTime @default(now())
+
+  business    Business @relation(fields: [businessId], references: [id])
+  
+  @@index([businessId])
+}
+
+// 6. Rule (Automations, Constraints)
+model Rule {
+  id          String   @id @default(uuid())
+  businessId  String
+  name        String
+  condition   Json     // Evaluated by Execution Engine
+  action      Json     // What to execute if condition is met
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  business    Business @relation(fields: [businessId], references: [id])
+  
+  @@index([businessId])
+}
+
+// -----------------------------------------------------------------------------
+// EVENT MODEL (CQRS / Event Sourcing)
+// -----------------------------------------------------------------------------
+
+// 7. EventStore (Immutable Facts)
+model EventStore {
+  id            String   @id @default(uuid())
+  businessId    String
+  aggregateId   String   // ID of the entity affected
+  eventType     String   // e.g., "CustomerCreated", "PaymentReceived"
+  actor         String   // Who triggered the event
+  source        String   // "User", "API", "Automation"
+  payload       Json     // The event data
+  createdAt     DateTime @default(now())
+
+  business      Business @relation(fields: [businessId], references: [id])
+  
+  @@index([businessId, aggregateId])
+  @@index([createdAt])
+}
